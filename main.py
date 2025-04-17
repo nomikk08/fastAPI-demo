@@ -1,17 +1,17 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Body
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from models import User, Token
-from auth import (
-    authenticate_user,
-    create_access_token,
-    decode_and_verify_token,
-)
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from database import SessionLocal
+
+from database import SessionLocal, Base, engine
 from langdetect import detect, LangDetectException
 from translatepy import Translator
 
+from dependencies import get_api_token
+from models import APIToken
+from schemas import APITokenResponse
+
 app = FastAPI()
+Base.metadata.create_all(bind=engine)
 translator = Translator()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -23,21 +23,24 @@ def get_db():
     finally:
         db.close()
 
-@app.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(form_data.username, form_data.password)
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    access_token = create_access_token(data={"sub": user.username})
-    return {"access_token": access_token, "token_type": "bearer"}
+@app.post("/generate-token", response_model=APITokenResponse)
+def generate_token(db: Session = Depends(get_db)):
+    token = APIToken()
+    db.add(token)
+    db.commit()
+    db.refresh(token)
+    return {
+        "api_key": token.api_key,
+        "api_secret": token.api_secret
+    }
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = decode_and_verify_token(token)
-    return user
-
-@app.get("/me", response_model=User)
-async def read_me(current_user: User = Depends(get_current_user)):
-    return current_user
+@app.get("/protected-route")
+def read_protected_data(token: APIToken = Depends(get_api_token)):
+    return {
+        "message": "You have access to this protected route!",
+        "your_api_key": token.api_key,
+        "your_api_secret": token.api_secret
+    }
 
 @app.post("/detect_language")
 async def detect_language(text: str = Body(...)):

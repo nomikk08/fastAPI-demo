@@ -1,31 +1,10 @@
-from pydantic import BaseModel
-from sqlalchemy import Column, Integer, String, Boolean
-from sqlalchemy.ext.declarative import declarative_base
+import uuid
+import secrets
+from sqlalchemy import Column, String
+from database import Base
 
-Base = declarative_base()  # SQLAlchemy Base for DB model
+class APIToken(Base):
+    __tablename__ = "api_tokens"
 
-# === SQLAlchemy User model for DB ===
-class UserTable(Base):
-    __tablename__ = "users"
-
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    full_name = Column(String, nullable=True)
-    hashed_password = Column(String)
-    disabled = Column(Boolean, default=False)
-
-# === Pydantic models for validation ===
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-class TokenData(BaseModel):
-    username: str | None = None
-
-class User(BaseModel):
-    username: str
-    full_name: str | None = None
-    disabled: bool | None = None
-
-class UserInDB(User):
-    hashed_password: str
+    api_key = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    api_secret = Column(String, nullable=False, default=lambda: secrets.token_hex(16))
