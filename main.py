@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal, Base, engine
 from langdetect import detect, LangDetectException
 from translatepy import Translator
+import re
 
 from dependencies import get_api_token
 from models import APIToken
@@ -71,3 +72,39 @@ async def translate(
         return {"translations": translations}
     except Exception:
         raise HTTPException(status_code=500, detail="Translation error")
+
+def split_text_into_phrases(text: str):
+    # Split by sentence-ending punctuation, keep it simple for now
+    phrases = re.split(r'[.?!]\s*', text)
+    return [p.strip() for p in phrases if p.strip()]
+
+@app.post("/phrase_definitions")
+async def phrase_definitions(text: str = Body(...)):
+    phrases = split_text_into_phrases(text)
+    target_languages = ["en", "fr", "de", "es", "hi", "it"]
+
+    results = []
+
+    for phrase in phrases:
+        definitions = []
+        for lang in target_languages:
+            try:
+                translated = translator.translate(phrase, destination_language=lang)
+                definitions.append({
+                    "text": translated.result,
+                    "language": lang,
+                    "reference": "menulance.com"
+                })
+            except Exception:
+                definitions.append({
+                    "text": "Translation failed",
+                    "language": lang,
+                    "reference": "menulance.com"
+                })
+
+        results.append({
+            "phrase": phrase,
+            "definitions": definitions
+        })
+
+    return {"result": results}
